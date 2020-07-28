@@ -15,6 +15,8 @@ struct TableView {
         struct CellIdentifiers {
         static let searchResultCell = "SearchResultCell"
         static let nothingFoundCell = "NothingFoundCell"
+        static let loadingCell = "LoadingCell"
+
         }
     }
 
@@ -27,6 +29,8 @@ class SearchViewController: UIViewController {
     var searchResults = [SearchResult]()
     
     var hasSearched = false
+    var isLoading = false
+
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -35,6 +39,10 @@ class SearchViewController: UIViewController {
        
         cellNib = UINib(nibName: TableView.CellIdentifiers.nothingFoundCell, bundle: nil)
         tableView.register(cellNib, forCellReuseIdentifier: TableView.CellIdentifiers.nothingFoundCell)
+        
+        cellNib = UINib(nibName: TableView.CellIdentifiers.loadingCell,bundle: nil)
+        tableView.register(cellNib, forCellReuseIdentifier: TableView.CellIdentifiers.loadingCell)
+        
         
         searchBar.becomeFirstResponder()
         // Do any additional setup after loading the view.
@@ -106,25 +114,46 @@ extension SearchViewController : UISearchBarDelegate
         
         if !searchBar.text!.isEmpty
         {
-            searchBar.resignFirstResponder()
-            hasSearched = true
-            searchResults = []
+//            searchBar.resignFirstResponder()
+//            hasSearched = true
+//            searchResults = []
+//            isLoading = true
+//            tableView.reloadData()
+//
+//            let url = iTunesURL(searchText: searchBar.text!)
+//            print("URl : \(url)")
+//
+//            if let data = performStoreRequest(with: url)
+//            {
+//            searchResults = parse(data: data)
+//
+//                //Sorting The results
+//            searchResults.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+//
+//            }
+//            isLoading = false
+//            tableView.reloadData()
             
-            let url = iTunesURL(searchText: searchBar.text!)
-            print("URl : \(url)")
+            let queue = DispatchQueue.global()
+           // let url = self.iTunesURL(searchText: searchBar.text!)
             
-            if let data = performStoreRequest(with: url)
-            {
-            searchResults = parse(data: data)
-                
-                //Sorting The results
-//            searchResults.sort(by:
-//                { result1, result2 in
-//                    return result1.name.localizedStandardCompare(result2.name) == .orderedAscending})
-            searchResults.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-            
+            queue.async {
+                let url = self.iTunesURL(searchText: searchBar.text!)
+
+                if let data = self.performStoreRequest(with: url)
+                {
+                    self.searchResults = self.parse(data: data)
+
+                    //self.searchResults.sort(by: <)
+                    self.searchResults.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+
+                    DispatchQueue.main.async {
+                    self.isLoading = false
+                    self.tableView.reloadData()
+                    }
+                    return
+                }
             }
-            tableView.reloadData()
         }
     }
 
@@ -133,7 +162,8 @@ extension SearchViewController : UISearchBarDelegate
 extension SearchViewController : UITableViewDelegate , UITableViewDataSource
 {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-      
+            if isLoading
+            {return 1 }
             if !hasSearched {
             return 0
             } else if searchResults.count == 0 {
@@ -145,10 +175,14 @@ extension SearchViewController : UITableViewDelegate , UITableViewDataSource
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
                
-        let cell = tableView.dequeueReusableCell(withIdentifier: TableView.CellIdentifiers.searchResultCell , for: indexPath) as! SearchResultCell
+      if isLoading {
+        let cell = tableView.dequeueReusableCell(withIdentifier: TableView.CellIdentifiers.loadingCell, for: indexPath)
+        let spinner = cell.viewWithTag(100) as! UIActivityIndicatorView
+        spinner.startAnimating()
+        return cell
+        }
         
-        
-       if searchResults.count == 0
+      else if searchResults.count == 0
        {
             return tableView.dequeueReusableCell(withIdentifier: TableView.CellIdentifiers.nothingFoundCell, for: indexPath)
         } else {
@@ -175,7 +209,7 @@ extension SearchViewController : UITableViewDelegate , UITableViewDataSource
     }
     
     func tableView(_ tableView: UITableView, willSelectRowAt indexPath: IndexPath) -> IndexPath? {
-        if searchResults.count == 0
+        if searchResults.count == 0 || isLoading
         {return nil}
         else
         {return indexPath}
